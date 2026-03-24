@@ -1,0 +1,235 @@
+---
+title: "Project 2: Calibration Plots for COMPAS Recidivism Risk Scores"
+author: "Sevastian Sanchez"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: yes
+    toc_depth: 3
+    toc_float: yes
+    number_sections: yes
+    highlight: tango
+    theme: default
+    fig_caption: yes
+    df_print: tibble
+  pdf_document:
+    toc: no
+    toc_depth: '3'
+    number_sections: yes
+urlcolor: blue
+---
+
+# Directory and data loading
+```{r include=FALSE}
+library(aod)
+library(ggplot2)
+library(dplyr)
+
+# read data
+compas_scores <- read.csv("data/compas-scores-two-years.csv")
+
+# color palette
+palette <- c("#46648B", "#F15511", "#D6E1F1", "#000000", "#FFFFFF")
+```
+
+# Calibration plot (1) 
+predicted vs. observed recidivism with a 45-degree "perfect calibration" reference line
+[General crime]
+```{r}
+risk_scores_vs_recidivism <- compas_scores %>%
+  group_by(decile_score.1) %>%
+  summarise(
+    mean_recid = mean(two_year_recid),
+    sd_recid = sd(two_year_recid),
+    n = n()
+  ) %>%
+  mutate(
+    observed_rate = mean_recid * 100,
+    predicted = decile_score.1 * 10,
+    se_rate = (sd_recid / sqrt(n)) * 100
+  )
+
+ggplot(risk_scores_vs_recidivism, aes(x = predicted, y = observed_rate)) +
+  geom_abline(intercept = 0, slope = 1,
+              linetype = "dashed", color = palette[4], linewidth = 0.6) +
+  geom_errorbar(aes(ymin = observed_rate - se_rate,
+                    ymax = observed_rate + se_rate),
+                width = 2, color = palette[1], alpha = 0.5) +
+  geom_line(color = palette[1], linewidth = 0.9, alpha = 0.7) +
+  geom_point(color = palette[1], size = 3.5) +
+  scale_x_continuous(breaks = seq(10, 100, 10), limits = c(0, 100)) +
+  scale_y_continuous(breaks = seq(0, 100, 10), limits = c(0, 100)) +
+  labs(
+    title = "General Recidivism Risk Score vs Actual Recidivism",
+    x = "Predicted Risk (Score × 10)",
+    y = "Observed Recidivism Rate (prop %)",
+    caption = "Dashed line = perfect calibration. Error bars = ±1 SE.\nNote: Decile scores rescaled ×10 for visual comparison only; do not represent predicted probabilities."
+  ) +
+  theme_bw() +
+  theme(
+    plot.title = element_text(size = 12, face = "bold"),
+    plot.caption = element_text(size = 9, color = "gray50"),
+    axis.title = element_text(size = 11),
+    panel.grid.minor = element_blank()
+  )
+
+ggsave("figures/general_crime_calibration_plot.png", width = 6, height = 4, dpi = 300)
+
+```
+
+
+# Calibration plot (2)
+predicted vs. observed recidivism with a 45° "perfect calibration" reference line 
+[Violent crime]
+```{r}
+risk_scores_vs_violent_recidivism <- compas_scores %>%
+  group_by(v_decile_score) %>%
+  summarise(
+    mean_recid = mean(two_year_recid),
+    sd_recid = sd(two_year_recid),
+    n = n()
+  ) %>%
+  mutate(
+    observed_rate = mean_recid * 100,
+    predicted = v_decile_score * 10,
+    se_rate = (sd_recid / sqrt(n)) * 100
+  )
+
+ggplot(risk_scores_vs_violent_recidivism, aes(x = predicted, y = observed_rate)) +
+  geom_abline(intercept = 0, slope = 1,
+              linetype = "dashed", color = palette[4], linewidth = 0.6) +
+  geom_errorbar(aes(ymin = observed_rate - se_rate,
+                    ymax = observed_rate + se_rate),
+                width = 2, color = palette[2], alpha = 0.5) +
+  geom_line(color = palette[2], linewidth = 0.9, alpha = 0.7) +
+  geom_point(color = palette[2], size = 3.5) +
+  scale_x_continuous(breaks = seq(10, 100, 10), limits = c(0, 100)) +
+  scale_y_continuous(breaks = seq(0, 100, 10), limits = c(0, 100)) +
+  labs(
+    title = "Violent Recidivism Risk Score vs Actual Recidivism",
+    x = "Predicted Risk (Score × 10)",
+    y = "Observed Recidivism Rate (prop %)",
+    caption = "Dashed line = perfect calibration. Error bars = ±1 SE.\nNote: Decile scores rescaled ×10 for visual comparison only; do not represent predicted probabilities."
+  ) +
+  theme_bw() +
+  theme(
+    plot.title = element_text(size = 12, face = "bold"),
+    plot.caption = element_text(size = 9, color = "gray50"),
+    axis.title = element_text(size = 11),
+    panel.grid.minor = element_blank()
+  )
+
+ggsave("figures/violent_crime_calibration_plot.png", width = 6, height = 4, dpi = 300)
+```
+
+# Calibrtion Plot (3) -- COMPARASON BY RACE
+predicted vs. observed recidivism between black and white individuals with a 45° 
+"perfect calibration" reference line 
+[General crime]
+```{r}
+# filter to Black and White respondents only, then compute observed rates per group
+calibration_by_race <- compas_scores %>%
+  filter(race %in% c("African-American", "Caucasian")) %>%
+  group_by(race, decile_score.1) %>%
+  summarise(
+    mean_recid = mean(two_year_recid),
+    sd_recid = sd(two_year_recid),
+    n = n(),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    observed_rate = mean_recid * 100,
+    predicted = decile_score.1 * 10,
+    se_rate = (sd_recid / sqrt(n)) * 100
+  )
+
+ggplot(calibration_by_race, aes(x = predicted, y = observed_rate,
+                                 color = race, group = race)) +
+  geom_abline(intercept = 0, slope = 1,
+              linetype = "dashed", color = palette[4], linewidth = 0.6) +
+  geom_errorbar(aes(ymin = observed_rate - se_rate,
+                    ymax = observed_rate + se_rate),
+                width = 2, alpha = 0.4) +
+  geom_line(linewidth = 0.9, alpha = 0.8) +
+  geom_point(size = 3.5) +
+  scale_color_manual(
+    values = c("African-American" = palette[1],   # slate blue
+               "Caucasian" = palette[2]),   # orange
+    name   = NULL
+  ) +
+  scale_x_continuous(breaks = seq(10, 100, 10), limits = c(0, 100)) +
+  scale_y_continuous(breaks = seq(0, 100, 10), limits = c(0, 100)) +
+  labs(
+    title = "Calibration by Race: Predicted vs Observed Recidivism",
+    x = "Predicted Risk (Score × 10)",
+    y = "Observed Recidivism Rate (prop %)",
+    caption = "Dashed line = perfect calibration. Error bars = ±1 SE.\nNote: Decile scores rescaled ×10 for visual comparison only; do not represent predicted probabilities."
+  ) +
+  theme_bw() +
+  theme(
+    plot.title = element_text(size = 12, face = "bold"),
+    plot.caption = element_text(size = 9, color = "gray50"),
+    axis.title = element_text(size = 11),
+    panel.grid.minor = element_blank(),
+    legend.position = "top"
+  )
+
+ggsave("figures/general_calibration_by_race.png", width = 7, height = 5, dpi = 300)
+
+```
+
+# Calibrtion Plot (4) -- COMPARASON BY RACE
+predicted vs. observed recidivism between black and white individuals with a 45° 
+"perfect calibration" reference line 
+[Violent crime]
+```{r}
+calibration_by_race_violent <- compas_scores %>%
+  filter(race %in% c("African-American", "Caucasian")) %>%
+  group_by(race, v_decile_score) %>%
+  summarise(
+    mean_recid = mean(two_year_recid),
+    sd_recid = sd(two_year_recid),
+    n = n(),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    observed_rate = mean_recid * 100,
+    predicted = v_decile_score * 10,
+    se_rate = (sd_recid / sqrt(n)) * 100
+  )
+
+ggplot(calibration_by_race_violent, aes(x = predicted, y = observed_rate,
+                                         color = race, group = race)) +
+  geom_abline(intercept = 0, slope = 1,
+              linetype = "dashed", color = palette[4], linewidth = 0.6) +
+  geom_errorbar(aes(ymin = observed_rate - se_rate,
+                    ymax = observed_rate + se_rate),
+                width = 2, alpha = 0.4) +
+  geom_line(linewidth = 0.9, alpha = 0.8) +
+  geom_point(size = 3.5) +
+  scale_color_manual(
+    values = c("African-American" = palette[1],
+               "Caucasian" = palette[2]),
+    name   = NULL
+  ) +
+  scale_x_continuous(breaks = seq(10, 100, 10), limits = c(0, 100)) +
+  scale_y_continuous(breaks = seq(0, 100, 10), limits = c(0, 100)) +
+  labs(
+    title = "Calibration by Race: Violent Recidivism Risk Score vs Actual Recidivism",
+    x = "Predicted Risk (Score × 10)",
+    y = "Observed Recidivism Rate (prop %)",
+    caption = "Dashed line = perfect calibration. Error bars = ±1 SE.\nNote: Decile scores rescaled ×10 for visual comparison only; do not represent predicted probabilities."
+  ) +
+  theme_bw() +
+  theme(
+    plot.title = element_text(size = 12, face = "bold"),
+    plot.caption = element_text(size = 9, color = "gray50"),
+    axis.title = element_text(size = 11),
+    panel.grid.minor = element_blank(),
+    legend.position = "top"
+  )
+
+ggsave("figures/violent_calibration_by_race.png", width = 7, height = 5, dpi = 300)
+
+```
+
